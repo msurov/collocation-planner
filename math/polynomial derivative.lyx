@@ -1,0 +1,194 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language russian
+\language_package default
+\inputencoding utf8
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style russian
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Section
+Пространство Соболева
+\end_layout
+
+\begin_layout Standard
+Для любых двух интегрируемых функций 
+\begin_inset Formula $f,g$
+\end_inset
+
+ определён оператор их скалярного произведения 
+\begin_inset Formula 
+\[
+\left\langle f,g\right\rangle =\int_{-1}^{1}f\left(x\right)g\left(x\right)dx.
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Полиномы:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+v_{k} & =x^{k}-\sum_{n=0}^{k-1}\left\langle x^{k},b_{n}\right\rangle b_{n}\\
+b_{k} & =\frac{v_{k}}{\left\Vert v_{k}\right\Vert }\text{,}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Получим
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+b_{1} & =\frac{\sqrt{6}}{2}x\\
+b_{2} & =\frac{3\sqrt{10}x^{2}}{4}-\frac{\sqrt{10}}{4}.\\
+b_{3} & =\frac{5\sqrt{14}x^{3}}{4}-\frac{3\sqrt{14}x}{4}\\
+b_{4} & =\frac{105\sqrt{2}x^{4}}{16}-\frac{90\sqrt{2}x^{2}}{16}+\frac{9\sqrt{2}}{16}\\
+b_{5} & =\frac{63\sqrt{22}x^{5}}{16}-\frac{70\sqrt{22}x^{3}}{16}+\frac{15\sqrt{22}x}{16}\\
+b_{6} & =\frac{231\sqrt{26}x^{6}}{32}-\frac{315\sqrt{26}x^{4}}{32}+\frac{105\sqrt{26}x^{2}}{32}-\frac{5\sqrt{26}}{32}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Производные
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\frac{db_{k}}{dx}=\sum_{n=0}^{k-1}d_{k,n}b_{n}\left(x\right)
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Производная от чётного элемента базиса 
+\begin_inset Formula $b_{k}$
+\end_inset
+
+ раскладывается по нечётным базисным функциям 
+\begin_inset Formula 
+\begin{align*}
+d_{k,n} & =\left(0,\sqrt{\left(2k+1\right)\cdot1},0,\sqrt{\left(2k+1\right)\cdot5},\dots,\sqrt{\left(2k+1\right)\cdot\left(2n+1\right)}\right)
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+производная от нечётного элемента базиса – по чётным
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+d_{k,n} & =\left(\sqrt{\left(2k+1\right)\cdot3},0,\sqrt{\left(2k+1\right)\cdot7},\dots,\sqrt{\left(2k+1\right)\cdot\left(2n+1\right)}\right).
+\end{align*}
+
+\end_inset
+
+В общем виде 
+\begin_inset Formula 
+\[
+d_{k,n}=\begin{cases}
+0 & k\mod2=n\mod2\\
+\sqrt{\left(2k+1\right)\cdot\left(2n+1\right)} & \text{othrwise}
+\end{cases}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

@@ -1,5 +1,5 @@
 from ast import Param
-from casadi import SX, DM, cos, sin, jacobian, vertcat, pinv, Function
+from casadi import SX, DM, cos, sin, jacobian, vertcat, pinv, Function, cumsum, horzcat, jtimes, sumsqr
 from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -60,17 +60,25 @@ class Dynamics:
         self.q = q
         self.dq = dq
 
-        self.get_positions()
+        p = self.get_positions()
+        v = jtimes(p, q, dq)
+
+        v**2
 
 
     def get_positions(self):
-        thetas = self.q[1:]
-        sin(thetas)
-        cos(thetas)
+        x = self.q[0]
+        theta = self.q[1:]
+        sin_theta = sin(theta)
+        cos_theta = cos(theta)
+        px = cumsum(sin_theta)
+        py = cumsum(cos_theta)
+        p = horzcat(px, py)
+        return p
 
 
 def test():
-    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=2)
+    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=3)
     d = Dynamics(p)
 
     exit()

@@ -1,71 +1,220 @@
 import numpy as np
-from casadi import MX,SX,DM,polyval,vertcat,substitute,jacobian,Function,reshape,horzcat,nlpsol,sin
-from poly import orthonormal_basis,decompose,basis_mat_form
+from casadi import MX,SX,DM,polyval,vertcat,substitute,\
+    Function,reshape,nlpsol,sin
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+from sym_poly import find_orthonormal_basis, find_orthogonal_basis
 
 
-deg = 11
-nc = deg + 1
-nx = 2
-ncolpts = deg
-basis = orthonormal_basis(deg)
-roots = np.roots(basis[-1])
-colpts = np.sort(roots)
-c = SX.sym('c', nx, nc)
-t = SX.sym('t')
+def evalf_coefs(poly):
+    return np.array(poly.all_coeffs(), float)
 
-x00 = 3
-x01 = 2
+def basis_mat(basis):
+    n = len(basis)
+    B = np.zeros((n, n))
+    for i,b in enumerate(basis):
+        B[i,n-i-1:] = b
+    return B
 
-basis_funcs = vertcat(*[polyval(b, t) for b in basis])
-basis_funcs_at_left = vertcat(*[polyval(b, -1) for b in basis])
-basis_funcs_at_right = vertcat(*[polyval(b, 1) for b in basis])
+def poly_scale_arg(poly, scale):
+    poly = np.copy(poly)
+    n = np.shape(poly)[-1]
+    for i in range(n):
+        poly[...,i] *= np.power(scale, i)
+    return poly
 
-xx = SX.sym('x', 2)
-F = Function('RHS', [xx], [vertcat(xx[1], xx[1]**2 * sin(xx[0]) - xx[0])])
+def solve_bvp(rhs_func, bc_func, deg):
+    nx = rhs_func.numel_out()
+    s = SX.sym('s')
 
-x = c @ basis_funcs
-x_left = c @ basis_funcs_at_left
-x_right = c @ basis_funcs_at_right
-x_at_colpts = [substitute(x, t, cp) for cp in colpts]
-dx = jacobian(x, t)
-dx_at_colpts = [substitute(dx, t, cp) for cp in colpts]
-F_at_colpts = [F(w) for w in x_at_colpts]
+    # construct basis functions
+    basis = find_orthogonal_basis(deg)
+    basis_coefs = [evalf_coefs(b) for b in basis]
+    deriv_basis_coefs = [evalf_coefs(b.diff()) for b in basis]
+    basis_polys = vertcat(*[polyval(c, s) for c in basis_coefs])
+    basis_polys_left = vertcat(*[polyval(c, 0) for c in basis_coefs])
+    basis_polys_right = vertcat(*[polyval(c, 1) for c in basis_coefs])
+    deriv_basis_polys = vertcat(*[polyval(c, s) for c in deriv_basis_coefs])
 
-eqs = [(a - b) for a,b in zip(dx_at_colpts, F_at_colpts)]
-eqs = vertcat(*eqs)
-eqs = vertcat(eqs, x_left[0] - x00, x_right[0] - x01)
+    bn = basis_coefs[-1]
+    roots = np.roots(bn)
+    collocation_points = np.sort(roots)        
 
-c_flat = reshape(c, -1, 1)
-nlp = {
-    'x': c_flat,
-    'f': 1,
-    'g': eqs
-}
+    nc = deg + 1
+    cx = SX.sym('cx', nx, nc)
+    x = cx @ basis_polys
+    dx = cx @ deriv_basis_polys
 
-BVP = nlpsol('B', 'ipopt', nlp)
-sol = BVP(lbg=-1e-5,ubg=1e-5)
-x_found = substitute(x, c_flat, sol['x'])
-x_fun = Function('x', [t], [x_found])
+    constraints = []
+    constraints_lb = []
+    constraints_ub = []
 
-tt = np.linspace(-1, 1)
-xx = np.array([x_fun(w)[:,0] for w in tt], float)
-xx = xx[:,:,0]
+    # differential equation at collocation points
+    tspan = SX.sym('T')
+    constraints += [tspan]
+    constraints_lb += [1e-2]
+    constraints_ub += [1e+2]
 
-plt.plot(tt, xx[:,0])
-plt.plot(tt, xx[:,1])
-plt.plot(-1, x00, 'o')
-plt.plot(1, x01, 'o')
+    for cp in collocation_points:
+        xcp = substitute(x, s, cp)
+        dxcp = substitute(dx, s, cp)
+        eq = dxcp - tspan * rhs_func(xcp)
+        constraints += [eq]
+        constraints_lb += [-1e-5 * DM.ones(eq.shape)]
+        constraints_ub += [1e-5 * DM.ones(eq.shape)]
 
-def rhs(_,x):
-    dx = F(x)
-    return np.reshape(dx, -1)
+    # boundary conditions
+    xl = cx @ basis_polys_left
+    xr = cx @ basis_polys_right
 
-x0 = np.array(xx[0,:], float)
-tspan = [-1, 1]
-sol = solve_ivp(rhs, tspan, x0, max_step=1e-3)
-plt.plot(sol.t, sol.y[0], '--')
-plt.plot(sol.t, sol.y[1], '--')
+    tmp = bc_func(xl, xr)
+    constraints += [tmp]
+    constraints_lb += [-1e-5 * DM.ones(tmp.shape)]
+    constraints_ub += [1e-5 * DM.ones(tmp.shape)]
 
-plt.show()
+    # compose NLP
+    decision_variables = [reshape(cx, -1, 1)]
+    decision_variables += [tspan]
+    cost_function = tspan
+
+    decision_variables = vertcat(*decision_variables)
+    constraints = vertcat(*constraints)
+    constraints_lb = vertcat(*constraints_lb)
+    constraints_ub = vertcat(*constraints_ub)
+
+    nlp = {
+        'x': decision_variables,
+        'f': cost_function,
+        'g': constraints
+    }
+
+    # solve NLP
+    BVP = nlpsol('BVP', 'ipopt', nlp)
+    dv0 = np.zeros(decision_variables.shape)
+    dv0[0] = 1
+    sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
+
+    cx_found = DM(substitute(cx, decision_variables, sol['x']))
+    tspan_found = float(substitute(tspan, decision_variables, sol['x']))
+    x_poly_found = np.array(cx_found @ basis_mat(basis_coefs))
+
+    return x_poly_found.T, tspan_found
+
+def solve_control(rhs_fun, bc_left_fun, bc_rigt_fun, deg):
+    nx,_ = rhs_fun.size_in(0)
+    nu,_ = rhs_fun.size_in(1)
+    s = SX.sym('s')
+
+    # construct basis functions
+    basis = find_orthogonal_basis(deg)
+    basis_coefs = [evalf_coefs(b) for b in basis]
+    deriv_basis_coefs = [evalf_coefs(b.diff()) for b in basis]
+    basis_polys = vertcat(*[polyval(c, s) for c in basis_coefs])
+    basis_polys_left = vertcat(*[polyval(c, 0) for c in basis_coefs])
+    basis_polys_right = vertcat(*[polyval(c, 1) for c in basis_coefs])
+    deriv_basis_polys = vertcat(*[polyval(c, s) for c in deriv_basis_coefs])
+
+    bn = basis_coefs[-1]
+    roots = np.roots(bn)
+    collocation_points = np.sort(roots)        
+
+    nc = deg + 1
+    cx = SX.sym('cx', nx, nc)
+    x = cx @ basis_polys
+    dx = cx @ deriv_basis_polys
+
+    cu = SX.sym('cu', nu, nc)
+    u = cu @ basis_polys
+
+    constraints = []
+    constraints_lb = []
+    constraints_ub = []
+
+    # differential equation at collocation points
+    tspan = SX.sym('T')
+    constraints += [tspan]
+    constraints_lb += [1e-2]
+    constraints_ub += [1e+2]
+
+    for cp in collocation_points:
+        xcp = substitute(x, s, cp)
+        dxcp = substitute(dx, s, cp)
+        ucp = substitute(u, s, cp)
+        eq = dxcp - tspan * rhs_func(xcp, ucp)
+        constraints += [eq]
+        constraints_lb += [-1e-5 * DM.ones(eq.shape)]
+        constraints_ub += [1e-5 * DM.ones(eq.shape)]
+
+    # boundary conditions
+    xl = cx @ basis_polys_left
+    tmp = bc_left_fun(xl)
+    constraints += [tmp]
+    constraints_lb += [-1e-5 * DM.ones(tmp.shape)]
+    constraints_ub += [1e-5 * DM.ones(tmp.shape)]
+
+    xr = cx @ basis_polys_right
+    tmp = bc_right_fun(xr)
+    constraints += [tmp]
+    constraints_lb += [-1e-5 * DM.ones(tmp.shape)]
+    constraints_ub += [1e-5 * DM.ones(tmp.shape)]
+
+    # compose NLP
+    decision_variables = [reshape(cx, -1, 1)]
+    decision_variables += [reshape(cu, -1, 1)]
+    decision_variables += [tspan]
+    cost_function = tspan
+
+    decision_variables = vertcat(*decision_variables)
+    constraints = vertcat(*constraints)
+    constraints_lb = vertcat(*constraints_lb)
+    constraints_ub = vertcat(*constraints_ub)
+
+    nlp = {
+        'x': decision_variables,
+        'f': cost_function,
+        'g': constraints
+    }
+
+    # solve NLP
+    BVP = nlpsol('BVP', 'ipopt', nlp)
+    dv0 = np.zeros(decision_variables.shape)
+    dv0[0] = 1
+    sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
+
+    cx_found = DM(substitute(cx, decision_variables, sol['x']))
+    tspan_found = float(substitute(tspan, decision_variables, sol['x']))
+    x_poly_found = np.array(cx_found @ basis_mat(basis_coefs))
+
+    return x_poly_found.T, tspan_found
+
+
+def test_solve_bvp():
+    x = SX.sym('x', 2)
+    rhs = Function('RHS', [x], [vertcat(x[1], x[1]**2 * sin(x[0]) - x[0])])
+
+    xl = SX.sym('x', 2)
+    xr = SX.sym('x', 2)
+    bc_func = Function('BC', [xl, xr], [vertcat(xl[0] - 2, xr[0] - 5)])
+
+    x_poly,tspan = solve_bvp(rhs, bc_func, 15)
+
+    sol = solve_ivp(
+        lambda _,x: np.reshape(rhs(x), -1),
+        [0, tspan],
+        np.polyval(x_poly, 0),
+        max_step=tspan*1e-2
+    )
+
+    s = np.linspace(0, 1, 100)
+    x1 = np.polyval(x_poly[:,0], s)
+    x2 = np.polyval(x_poly[:,1], s)
+    plt.plot(s * tspan, x1)
+    plt.plot(sol.t, sol.y[0])
+    # plt.plot(s * tspan, x2)
+    # plt.plot(sol.t, sol.y[1])
+    plt.show()
+
+if __name__ == '__main__':
+    np.set_printoptions(suppress=True, linewidth=200)
+    # test_solve_bvp()
+    solve_control()

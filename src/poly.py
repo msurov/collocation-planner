@@ -3,7 +3,7 @@ from scipy.integrate import quad
 
 
 def get_limits():
-    return -1,1
+    return 0, 1
 
 def product_poly(p1, p2):
     p = np.polymul(p1, p2)
@@ -31,8 +31,7 @@ def norm_sq(p):
 def norm(p):
     return np.sqrt(norm_sq(p))
 
-
-def __orthonormal_basis(deg):
+def orthonormal_basis(deg):
     assert deg > 0
 
     b0 = np.array([1.])
@@ -49,26 +48,6 @@ def __orthonormal_basis(deg):
         b = b / norm(b)
         basis += [b]
     
-    return basis
-
-def orthonormal_basis(deg):
-    assert deg > 0
-
-    b0 = np.array([np.sqrt(2)/2])
-    b1 = np.array([np.sqrt(6)/2, 0])
-    basis = [b0, b1]
-
-    for n in range(2, deg + 1):
-        b1 = basis[-1]
-        b2 = basis[-2]
-        u0 = n / np.sqrt(4*n**2 - 1)
-        u1 = (n - 1) / np.sqrt(4*(n - 1)**2 - 1)
-        b = np.polysub(
-            np.polymul([1 / u0, 0], b1), 
-            b2 * u1 / u0
-        )
-        basis += [b]
-
     return basis
 
 def orthogonal_basis(deg):
@@ -91,16 +70,6 @@ def orthogonal_basis(deg):
 def decompose(p, basis):
     return [product(p, b) / norm(b) for b in basis]
 
-def test_orthogonal_basis():
-    deg = 15
-    basis = orthogonal_basis(deg)
-    nelems = len(basis)
-    assert nelems == deg + 1
-    for i in range(nelems):
-        for j in range(nelems):
-            s = product(basis[i], basis[j])
-            assert np.abs(s) < 1e-12 or i == j
-
 def test_orthonormal_basis():
     deg = 15
     basis = orthonormal_basis(deg)
@@ -109,7 +78,7 @@ def test_orthonormal_basis():
     for i in range(nelems):
         for j in range(nelems):
             s = product(basis[i], basis[j])
-            assert np.allclose(s, int(i == j), atol=1e-7)
+            assert np.allclose(s, int(i == j), atol=1e-5)
 
 def test_decompose():
     deg = 5
@@ -233,10 +202,9 @@ def test_decompose_2():
 if __name__ == '__main__':
     np.set_printoptions(suppress=True, linewidth=200)
     # test_deriv_mat()
+    test_orthonormal_basis()
     # test_orthonormal_basis_mat()
-    # test_orthogonal_basis()
-    # test_orthonormal_basis()
     # test_decompose()
     # test_deriv_ceffs()
     # test_fit()
-    test_decompose_2()
+    # test_decompose_2()

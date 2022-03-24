@@ -101,7 +101,7 @@ def solve_bvp(rhs_fun, bc_func, deg):
     return x_poly_found.T, tspan_found
 
 
-def solve_mechanical_bvp(sys, qleft, qright, deg):
+def solve_mechanical_bvp(sys, qleft, qright, umin, umax, deg):
     M = sys['M']
     C = sys['C']
     G = sys['G']
@@ -198,18 +198,18 @@ def solve_mechanical_bvp(sys, qleft, qright, deg):
     for cp in collocation_points:
         ucp = substitute(u, s, cp)
         constraints += [ucp]
-        constraints_lb += [-10]
-        constraints_ub += [10]
+        constraints_lb += [umin * DM.ones(ucp.shape)]
+        constraints_ub += [umax * DM.ones(ucp.shape)]
 
     ucp = substitute(u, s, 0)
     constraints += [ucp]
-    constraints_lb += [-10]
-    constraints_ub += [10]
+    constraints_lb += [umin * DM.ones(ucp.shape)]
+    constraints_ub += [umax * DM.ones(ucp.shape)]
 
     ucp = substitute(u, s, 1)
     constraints += [ucp]
-    constraints_lb += [-10]
-    constraints_ub += [10]
+    constraints_lb += [umin * DM.ones(ucp.shape)]
+    constraints_ub += [umax * DM.ones(ucp.shape)]
 
     # compose NLP
     decision_variables = [reshape(cq, -1, 1)]
@@ -305,16 +305,13 @@ def solve_control(rhs_fun, bc_left_fun, bc_right_fun, deg):
 
     # cost function
     cost_function = tspan
-    # for cp in collocation_points:
-    #     ucp = substitute(u, s, cp)
-    #     cost_function += ucp.T @ ucp
 
     # control constraints
     for cp in collocation_points:
         ucp = substitute(u, s, cp)
         constraints += [ucp]
-        constraints_lb += [-10]
-        constraints_ub += [10]
+        constraints_lb += [umin * DM.ones(ucp.shape)]
+        constraints_ub += [umax * DM.ones(ucp.shape)]
 
     # compose NLP
     decision_variables = [reshape(cx, -1, 1)]

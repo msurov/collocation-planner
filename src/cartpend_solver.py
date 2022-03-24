@@ -72,7 +72,7 @@ def test2():
     }
     ql = DM([0, pi])
     qr = DM([0, 0])
-    qpoly, upoly, T = solve_mechanical_bvp(sys, ql, qr, deg=11)
+    qpoly, upoly, T = solve_mechanical_bvp(sys, ql, qr, -10, 10, deg=11)
 
     s = np.linspace(0, 1, 100)
     x = np.polyval(qpoly[:,0], s)
@@ -84,19 +84,20 @@ def test2():
         't': s * T,
         'q': np.array([x, theta]).T
     }
-    anim.run(simdata, filepath='fig/anim.mp4')
+    anim.run(simdata, animtime=5, filepath='fig/anim.mp4')
 
-    # _,axes = plt.subplots(3, 1, sharex=True)
-    # plt.sca(axes[0])
-    # plt.grid(True)
-    # plt.plot(s * T, x)
-    # plt.sca(axes[1])
-    # plt.grid(True)
-    # plt.plot(s * T, theta)
-    # plt.sca(axes[2])
-    # plt.grid(True)
-    # plt.plot(s * T, u)
-    # plt.show()
+    _,axes = plt.subplots(3, 1, sharex=True)
+    plt.sca(axes[0])
+    plt.grid(True)
+    plt.plot(s * T, x)
+    plt.sca(axes[1])
+    plt.grid(True)
+    plt.plot(s * T, theta)
+    plt.sca(axes[2])
+    plt.grid(True)
+    plt.plot(s * T, u)
+    plt.show()
+
 
 if __name__ == '__main__':
     test2()

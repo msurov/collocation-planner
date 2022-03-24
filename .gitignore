@@ -1,3 +1,4 @@
 *.lyx#
 *.lyx~
 __pycache__
+*.mp4

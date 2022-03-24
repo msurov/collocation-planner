@@ -1,56 +1,111 @@
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
 import numpy as np
-from mplsvgpath import load_path_patches, \
+from mplsvgpath import load_pathes, \
     get_stroke_color, get_fill_color, get_stroke_width
 from matplotlib.transforms import Affine2D
 from matplotlib.patches import PathPatch
 from matplotlib import animation
+from matplotlib.colors import hsv_to_rgb
+
+
+def get_links_positions(q):
+    R'''
+        returns the array of coordinates
+        [
+            [x0, y0] \
+            [x1, y1] \
+               ⋮    \
+            [xn, yn] \
+        ]
+    '''
+    nlinks = len(q) - 1
+    positions = np.zeros((nlinks, 2))
+    positions[0,0] = q[0]
+    positions[1:,0] = np.sin(q[1:-1])
+    positions[1:,1] = np.cos(q[1:-1])
+    positions = np.cumsum(positions, axis=0)
+    return positions
+
+
+def gen_rgb(i):
+    h = ((i * 47) % 251) / 251
+    s = 1
+    v = 1
+    return hsv_to_rgb((h,s,v))
 
 class CartPendAnim:
 
-    def __init__(self, svgpath, scale=1, flipy=False):
+    def __init__(self, svgpath, nlinks=1, scale=1e-2, flipy=True):
         fig = plt.figure(figsize=(19.20, 10.80))
         plt.axis('equal')
-        ax = plt.gca()
-        objs = load_pathes(svgpath)
-        patches = {}
+        self.fig = fig
+        self.ax = plt.gca()
 
         self.t0 = Affine2D()
         self.t0.scale(scale, -scale if flipy else scale)
 
-        for k in objs:
-            path,style = objs[k]
+        pathes = load_pathes(svgpath)
+        self.create_cart_body(pathes)
+        self.create_links(pathes, nlinks)
+
+    def create_cart_body(self, pathes):
+        self.body = []
+
+        for pathid in pathes:
+            path,style = pathes[pathid]
             fillcolor = get_fill_color(style)
             strokecolor = get_stroke_color(style)
             linewidth = get_stroke_width(style)
 
-            if fillcolor is not None:
-                patch = PathPatch(path, fill=True, fc=fillcolor, ec=strokecolor, lw=linewidth)
-            else:
-                patch = PathPatch(path, fill=False, ec=strokecolor, lw=linewidth)
+            if pathid == 'link':
+                continue
 
-            patches[k] = patch
-            patch.set_transform(self.t0 + ax.transData)
-            ax.add_patch(patch)
-        
-        self.fig = fig
-        self.ax = ax
-        self.patches = patches
+            p = PathPatch(path, fill = fillcolor is not None, 
+                fc = fillcolor, ec = strokecolor, lw = linewidth)
+            p.set_transform(self.t0 + self.ax.transData)
+            self.body.append(p)
+            self.ax.add_patch(p)
+
+    def create_links(self, pathes, nlinks):
+        self.links = []
+
+        path,style = pathes['link']
+        fillcolor = get_fill_color(style)
+        strokecolor = get_stroke_color(style)
+        linewidth = get_stroke_width(style)
+
+        args = {
+            'fill': fillcolor is not None, 
+            'fc': fillcolor,
+            'ec': strokecolor,
+            'lw': linewidth
+        }
+        for i in range(nlinks):
+            args['fc'][0:3] = gen_rgb(i)
+            p = PathPatch(path, **args)
+            p.set_transform(self.t0 + self.ax.transData)
+            self.links.append(p)
+            self.ax.add_patch(p)
 
     def move(self, q):
-        x,theta = q
-        for k in self.patches:
-            p = self.patches[k]
+        positions = get_links_positions(q)
+        thetas = q[1:]
+        x0,y0 = positions[0,:]
+        t = Affine2D()
+        t.translate(x0, y0)
+
+        for p in self.body:
+            p.set_transform(self.t0 + t + self.ax.transData)
+
+        for i,link in enumerate(self.links):
+            x,y = positions[i]
+            theta = thetas[i]
             t = Affine2D()
-            t.clear()
-            if k == 'pendulum':
-                t.rotate(-theta)
-                t.translate(x, 0)
-                p.set_transform(self.t0 + t + self.ax.transData)
-            else:
-                t.translate(x, 0)
-                p.set_transform(self.t0 + t + self.ax.transData)
+            t.rotate(-theta)
+            t.translate(x, y)
+            link.set_transform(self.t0 + t + self.ax.transData)
+
 
     def run(self, simdata, filepath=None, fps=60, animtime=None, speedup=None):
         qsp = make_interp_spline(simdata['t'], simdata['q'], k=1)
@@ -61,7 +116,7 @@ class CartPendAnim:
         x1 = np.min(x)
         x2 = np.max(x)
 
-        self.ax.set_ylim(-1, 1)
+        # self.ax.set_ylim(-1, 1)
         self.ax.set_xlim(x1 - 1, x2 + 1)
         self.ax.set_axisbelow(True)
 
@@ -80,13 +135,13 @@ class CartPendAnim:
             speedup = 1
 
         def animinit():
-            return self.patches.values()
+            return self.body + self.links
 
         def animupdate(iframe):
             ti = iframe * speedup / fps
             q = qsp(ti)
             self.move(q)
-            return self.patches.values()
+            return self.body + self.links
 
         anim = animation.FuncAnimation(self.fig, animupdate, init_func=animinit, frames=nframes, blit=True)
         if filepath is not None:
@@ -103,11 +158,11 @@ class CartPendAnim:
 
 
 def test():
-    anim = CartPendAnim('fig/cartpend.svg', scale=0.01, flipy=True)
+    anim = CartPendAnim('fig/cartpend-2.svg', nlinks=3, scale=0.01, flipy=True)
     t = np.linspace(0, 10, 1000)
     simdata = {
         't': t,
-        'q': np.array([0*t, t]).T
+        'q': np.array([t, 2*t+1, 3*t+2, -4*t+2]).T
     }
     anim.run(simdata)
 

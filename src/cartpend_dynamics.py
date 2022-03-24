@@ -12,8 +12,9 @@ class Parameters:
     l : float # pendulum length
     m_cart : float # cart mass
     g : float # gravity accel
+    nlinks : int
 
-class Dynamics:
+class DynamicsOld:
 
     def __init__(self, p : Parameters):
         q = SX.sym('q', 2)
@@ -44,9 +45,35 @@ class Dynamics:
         self.rhs = rhs
 
 
+class Dynamics:
+
+    def __init__(self, p : Parameters):
+        assert p.nlinks >= 1
+
+        self.nlinks = p.nlinks
+
+        q = SX.sym('q', self.nlinks + 1)
+        dq = SX.sym('dq', self.nlinks + 1)
+        u = SX.sym('u')
+        theta = q[1]
+
+        self.q = q
+        self.dq = dq
+
+        self.get_positions()
+
+
+    def get_positions(self):
+        thetas = self.q[1:]
+        sin(thetas)
+        cos(thetas)
+
+
 def test():
-    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8)
+    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=2)
     d = Dynamics(p)
+
+    exit()
 
     F = Function('rhs', [vertcat(d.q, d.dq), d.u], [d.rhs])
     def rhs(t, st):

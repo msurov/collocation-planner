@@ -22,7 +22,7 @@ def get_stroke_color(style):
         a = float(style['stroke-opacity'])
     else:
         a = 1
-    color = (r/255, g/255, b/255, a)
+    color = [r/255, g/255, b/255, a]
     return color
 
 def get_stroke_width(style):
@@ -78,7 +78,7 @@ def get_fill_color(style):
     if 'fill' not in style: return None
     r,g,b = svgpathtools.hex2rgb(style['fill'])
     a = float(style['fill-opacity']) if 'fill-opacity' in style else 1.
-    return (r/255.,g/255.,b/255.,a)
+    return [r/255.,g/255.,b/255.,a]
 
 def load_pathes(svgpath):
     paths,attributes = svgpathtools.svg2paths(svgpath)

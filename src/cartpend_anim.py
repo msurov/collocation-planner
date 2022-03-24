@@ -13,7 +13,7 @@ class CartPendAnim:
         fig = plt.figure(figsize=(19.20, 10.80))
         plt.axis('equal')
         ax = plt.gca()
-        objs = load_path_patches(svgpath)
+        objs = load_pathes(svgpath)
         patches = {}
 
         self.t0 = Affine2D()

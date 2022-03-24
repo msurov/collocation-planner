@@ -84,7 +84,7 @@ def test2():
         't': s * T,
         'q': np.array([x, theta]).T
     }
-    anim.run(simdata, animtime=5, filepath='fig/anim.mp4')
+    anim.run(simdata, animtime=2, filepath='fig/anim.mp4')
 
     _,axes = plt.subplots(3, 1, sharex=True)
     plt.sca(axes[0])

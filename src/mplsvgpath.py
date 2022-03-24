@@ -80,7 +80,7 @@ def get_fill_color(style):
     a = float(style['fill-opacity']) if 'fill-opacity' in style else 1.
     return (r/255.,g/255.,b/255.,a)
 
-def load_path_patches(svgpath):
+def load_pathes(svgpath):
     paths,attributes = svgpathtools.svg2paths(svgpath)
     objs = {}
 

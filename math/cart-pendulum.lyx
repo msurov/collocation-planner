@@ -78,6 +78,10 @@
 
 \begin_body
 
+\begin_layout Section
+Уравнения Лагранжа
+\end_layout
+
 \begin_layout Standard
 \begin_inset Formula $\dot{x}=\dot{x}+l\cos\theta\dot{\theta}$
 \end_inset
@@ -276,6 +280,51 @@ minimize
 
 \begin_layout Standard
 —
+\end_layout
+
+\begin_layout Section
+Гамильтоновы уравнения
+\end_layout
+
+\begin_layout Standard
+Импульс
+\begin_inset Formula 
+\[
+p=\frac{\partial L}{\partial\dot{q}}=\frac{\partial K}{\partial\dot{q}}=M\dot{q}
+\]
+
+\end_inset
+
+или 
+\begin_inset Formula 
+\begin{align*}
+p_{x} & =\left(m+m_{c}\right)\dot{x}+ml\cos\theta\dot{\theta}\\
+p_{\theta} & =ml\cos\theta\dot{x}+ml^{2}\dot{\theta}
+\end{align*}
+
+\end_inset
+
+Гамильтониан 
+\begin_inset Formula 
+\[
+H=\frac{p^{T}M^{-1}p}{2}+U
+\]
+
+\end_inset
+
+Тогда 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\dot{q} & =H_{p}=M^{-1}p\\
+\dot{p} & =-H_{q}=\dots
+\end{align*}
+
+\end_inset
+
+
 \end_layout
 
 \end_body

@@ -33,6 +33,10 @@ class Dynamics:
         ddq = pinv(M) @ (-C @ dq - G + B @ u)
         rhs = vertcat(dq, ddq)
 
+        self.M = M
+        self.C = C
+        self.G = G
+        self.B = B
         self.q = q
         self.dq = dq
         self.ddq = ddq

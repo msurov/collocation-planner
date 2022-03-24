@@ -150,7 +150,6 @@ def test_deriv_mat():
     x = np.random.normal()
     val1 = eval(DB, c, x)
 
-    # on the other hand
     basis = orthonormal_basis(deg)
     q = np.array([], float)
     for b,c in zip(basis, c):
@@ -201,10 +200,10 @@ def test_decompose_2():
 
 if __name__ == '__main__':
     np.set_printoptions(suppress=True, linewidth=200)
-    # test_deriv_mat()
+    test_deriv_mat()
     test_orthonormal_basis()
-    # test_orthonormal_basis_mat()
-    # test_decompose()
-    # test_deriv_ceffs()
-    # test_fit()
-    # test_decompose_2()
+    test_orthonormal_basis_mat()
+    test_decompose()
+    test_deriv_ceffs()
+    test_fit()
+    test_decompose_2()

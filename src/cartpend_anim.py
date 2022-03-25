@@ -48,6 +48,7 @@ class CartPendAnim:
         pathes = load_pathes(svgpath)
         self.create_cart_body(pathes)
         self.create_links(pathes, nlinks)
+        self.nlinks = nlinks
 
     def create_cart_body(self, pathes):
         self.body = []
@@ -116,8 +117,8 @@ class CartPendAnim:
         x1 = np.min(x)
         x2 = np.max(x)
 
-        # self.ax.set_ylim(-1, 1)
-        self.ax.set_xlim(x1 - 1, x2 + 1)
+        self.ax.set_ylim(-self.nlinks, self.nlinks)
+        self.ax.set_xlim(x1 - self.nlinks, x2 + self.nlinks)
         self.ax.set_axisbelow(True)
 
         plt.grid(True)

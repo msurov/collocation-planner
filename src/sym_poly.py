@@ -117,8 +117,25 @@ def test_orthogonal_basis():
             s = prod(basis[i], basis[j])
             assert s == 0 or i == j
 
+def deriv_proj_mat(deg):
+    '''
+        Return the matrix of scalar products < b' | b >
+    '''
+    basis = find_orthogonal_basis(deg)
+    derivs = [b.diff() for b in basis]
+    D = sy.zeros(deg + 1, deg + 1)
+    for i in range(deg + 1):
+        for j in range(deg + 1):
+            D[i,j] = prod(derivs[i], basis[j])
+    return D
+
+def test_deriv_proj_mat():
+    M = deriv_proj_mat(8)
+    print(M)
+
 if __name__ == '__main__':
-    test_decompose_derivs()
-    test_orthonormal_basis()
-    plot_basis()
-    test_orthogonal_basis()
+    # test_decompose_derivs()
+    # test_orthonormal_basis()
+    # plot_basis()
+    # test_orthogonal_basis()
+    test_deriv_proj_mat()

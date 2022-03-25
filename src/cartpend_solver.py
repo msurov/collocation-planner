@@ -1,7 +1,7 @@
 from casadi import MX,SX,DM,polyval,vertcat,substitute,\
     Function,reshape,nlpsol,sin, pi
 from scipy.integrate import solve_ivp
-from cartpend import Dynamics, Parameters
+from cartpend_dynamics import Dynamics, Parameters
 from bvp_solver import solve_bvp, solve_control, solve_mechanical_bvp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -58,7 +58,7 @@ def test():
 
 
 def test2():
-    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8)
+    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=1)
     d = Dynamics(p)
 
     sys = {
@@ -70,21 +70,22 @@ def test2():
         'dq': d.dq,
         'u': d.u,
     }
+
     ql = DM([0, pi])
     qr = DM([0, 0])
-    qpoly, upoly, T = solve_mechanical_bvp(sys, ql, qr, -10, 10, deg=11)
+    qpoly, upoly, T = solve_mechanical_bvp(sys, ql, qr, -50, 50, deg=13)
 
     s = np.linspace(0, 1, 100)
     x = np.polyval(qpoly[:,0], s)
     theta = np.polyval(qpoly[:,1], s)
     u = np.polyval(upoly, s)
 
-    anim = CartPendAnim('fig/cartpend.svg', 0.01, True)
+    anim = CartPendAnim('fig/cartpend.svg', p.nlinks)
     simdata = {
         't': s * T,
         'q': np.array([x, theta]).T
     }
-    anim.run(simdata, animtime=2, filepath='fig/anim.mp4')
+    anim.run(simdata, animtime=2, filepath='data/anim.mp4')
 
     _,axes = plt.subplots(3, 1, sharex=True)
     plt.sca(axes[0])

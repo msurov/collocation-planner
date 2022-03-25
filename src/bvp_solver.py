@@ -243,6 +243,138 @@ def solve_mechanical_bvp(sys, qleft, qright, umin, umax, deg):
 
     return q_poly_found.T, u_poly_found.T, T_found
 
+def solve_mechanical_bvp_v2(sys, qleft, qright, umin, umax, deg):
+    M = sys['M']
+    C = sys['C']
+    G = sys['G']
+    B = sys['B']
+    q = sys['q']
+    dq = sys['dq']
+    u = sys['u']
+    s = SX.sym('s')
+
+    nq,_ = q.shape
+    nu,_ = u.shape
+
+    # construct basis functions
+    basis = find_orthogonal_basis(deg)
+    D_basis = [b.diff() for b in basis]
+    D2_basis = [b.diff() for b in D_basis]
+
+    basis_coefs = [evalf_coefs(b) for b in basis]
+    D_basis_coefs = [evalf_coefs(b) for b in D_basis]
+    D2_basis_coefs = [evalf_coefs(b) for b in D2_basis]
+
+    basis_polys = vertcat(*[polyval(c, s) for c in basis_coefs])
+    D_basis_polys = vertcat(*[polyval(c, s) for c in D_basis_coefs])
+    D2_basis_polys = vertcat(*[polyval(c, s) for c in D2_basis_coefs])
+
+    basis_polys_left = vertcat(*[polyval(c, 0) for c in basis_coefs])
+    basis_polys_right = vertcat(*[polyval(c, 1) for c in basis_coefs])
+
+    D_basis_polys_left = vertcat(*[polyval(c, 0) for c in D_basis_coefs])
+    D_basis_polys_right = vertcat(*[polyval(c, 1) for c in D_basis_coefs])
+
+    # find collocation points
+    bn = basis_coefs[-1]
+    roots = np.roots(bn)
+    collocation_points = np.sort(roots)        
+
+    # q,dq,ddq,u decomposition
+    nc = deg + 1
+    cq = SX.sym('cq', nq, nc)
+    cp = SX.sym('cp', nq, nc)
+    q = cq @ basis_polys
+    p = cp @ basis_polys
+    dq = cq @ D_basis_polys
+
+    # constraints
+    constraints = []
+    constraints_lb = []
+    constraints_ub = []
+
+    # equations
+    T = SX.sym('T')
+    constraints += [T]
+    constraints_lb += [1e-2]
+    constraints_ub += [1e+2]
+
+    # boundary conditions
+    eq = cq @ basis_polys_left - qleft
+    constraints += [eq]
+    constraints_lb += [-1e-5 * DM.ones(eq.shape)]
+    constraints_ub += [1e-5 * DM.ones(eq.shape)]
+
+    eq = cq @ D_basis_polys_left
+    constraints += [eq]
+    constraints_lb += [-1e-5 * DM.ones(eq.shape)]
+    constraints_ub += [1e-5 * DM.ones(eq.shape)]
+
+    eq = cq @ basis_polys_right - qright
+    constraints += [eq]
+    constraints_lb += [-1e-5 * DM.ones(eq.shape)]
+    constraints_ub += [1e-5 * DM.ones(eq.shape)]
+
+    eq = cq @ D_basis_polys_right
+    constraints += [eq]
+    constraints_lb += [-1e-5 * DM.ones(eq.shape)]
+    constraints_ub += [1e-5 * DM.ones(eq.shape)]
+
+    # cost function
+    cost_function = dq
+
+    D = DM(deriv_proj_mat(deg))
+    
+
+    # control constraints
+    for cp in collocation_points:
+        ucp = substitute(u, s, cp)
+        constraints += [ucp]
+        constraints_lb += [umin * DM.ones(ucp.shape)]
+        constraints_ub += [umax * DM.ones(ucp.shape)]
+
+    ucp = substitute(u, s, 0)
+    constraints += [ucp]
+    constraints_lb += [umin * DM.ones(ucp.shape)]
+    constraints_ub += [umax * DM.ones(ucp.shape)]
+
+    ucp = substitute(u, s, 1)
+    constraints += [ucp]
+    constraints_lb += [umin * DM.ones(ucp.shape)]
+    constraints_ub += [umax * DM.ones(ucp.shape)]
+
+    # compose NLP
+    decision_variables = [reshape(cq, -1, 1)]
+    decision_variables += [reshape(cu, -1, 1)]
+    decision_variables += [T]
+
+    decision_variables = vertcat(*decision_variables)
+    constraints = vertcat(*constraints)
+    constraints_lb = vertcat(*constraints_lb)
+    constraints_ub = vertcat(*constraints_ub)
+
+    nlp = {
+        'x': decision_variables,
+        'f': cost_function,
+        'g': constraints
+    }
+
+    # solve NLP
+    BVP = nlpsol('BVP', 'ipopt', nlp)
+    dv0 = np.zeros(decision_variables.shape)
+    dv0[0] = 1
+    sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
+
+    B = basis_mat(basis_coefs)
+
+    T_found = float(substitute(T, decision_variables, sol['x']))
+    cq_found = DM(substitute(cq, decision_variables, sol['x']))
+    q_poly_found = np.array(cq_found @ B)
+    cu_found = DM(substitute(cu, decision_variables, sol['x']))
+    u_poly_found = np.array(cu_found @ B)
+
+    return q_poly_found.T, u_poly_found.T, T_found
+
 
 def solve_control(rhs_fun, bc_left_fun, bc_right_fun, deg):
     nx,_ = rhs_fun.size_in(0)

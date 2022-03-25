@@ -1,5 +1,6 @@
 from ast import Param
-from casadi import SX, DM, cos, sin, jacobian, vertcat, pinv, Function, cumsum, horzcat, jtimes, sumsqr
+from casadi import SX, DM, cos, sin, jacobian, vertcat, pinv, Function, \
+    cumsum, horzcat, jtimes, sumsqr, sum1, sum2, substitute
 from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -28,7 +29,7 @@ class DynamicsOld:
         M[1,1] = p.m_pend * p.l**2
         Z = jacobian(M @ dq, q)
         C = Z - 0.5 * Z.T
-        U = p.m_pend * p.l * cos(theta)
+        U = p.m_pend * p.g * p.l * cos(theta)
         G = jacobian(U, q).T
         B = DM([[1], 0])
         ddq = pinv(M) @ (-C @ dq - G + B @ u)
@@ -45,6 +46,17 @@ class DynamicsOld:
         self.rhs = rhs
 
 
+def kinetic_energy_form(K, dq):
+    p = jacobian(K, dq)
+    M = jacobian(p, dq)
+    return M
+
+def coriolis_mat(M, q, dq):
+    Z = jacobian(M @ dq, q)
+    C = Z - 0.5 * Z.T
+    return C
+
+
 class Dynamics:
 
     def __init__(self, p : Parameters):
@@ -59,42 +71,62 @@ class Dynamics:
 
         self.q = q
         self.dq = dq
+        self.u = u
 
-        p = self.get_positions()
-        v = jtimes(p, q, dq)
+        positions = self.get_positions(p)
+        velocities = jtimes(positions, q, dq)
+        velocities_sq = sum2(velocities**2)
+        K = (p.m_cart * velocities_sq[0] + p.m_pend * sum1(velocities_sq[1:])) / 2
+        U = p.m_cart * p.g * positions[0,1] + \
+            p.m_pend * p.g * sum1(positions[1:,1])
+        M = kinetic_energy_form(K, dq)
+        C = coriolis_mat(M, q, dq)
+        G = jacobian(U, q).T
+        B = vertcat(1, SX.zeros(self.nlinks,1))
+        self.M = M
+        self.C = C
+        self.G = G
+        self.B = B
 
-        v**2
+        ddq = pinv(M) @ (-C @ dq - G + B @ u)
+        self.rhs = vertcat(dq, ddq)
 
 
-    def get_positions(self):
+    def get_positions(self, p : Parameters):
         x = self.q[0]
         theta = self.q[1:]
         sin_theta = sin(theta)
         cos_theta = cos(theta)
-        px = cumsum(sin_theta)
-        py = cumsum(cos_theta)
+        px = cumsum(vertcat(x, p.l * sin_theta))
+        py = cumsum(vertcat(0, p.l * cos_theta))
         p = horzcat(px, py)
         return p
 
 
 def test():
-    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=3)
-    d = Dynamics(p)
+    from cartpend_anim import CartPendAnim
 
-    exit()
+    nlinks = 5
+    p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=nlinks)
+    d = Dynamics(p)
 
     F = Function('rhs', [vertcat(d.q, d.dq), d.u], [d.rhs])
     def rhs(t, st):
-        u = -(st[0] - 1) * 5
+        u = 0
         dst = F(st, u)
         return np.reshape(dst, (-1))
     
-    st0 = np.zeros(4)
+    st0 = 1e-3 * np.random.normal(size=2 * (nlinks + 1))
     tspan = [0, 10]
     sol = solve_ivp(rhs, tspan, st0, max_step=1e-3)
-    plt.plot(sol.t, sol.y[0])
-    plt.plot(sol.t, sol.y[1])
-    plt.show()
+
+    anim = CartPendAnim('fig/cartpend.svg', nlinks)
+    simdata = {
+        't': sol.t,
+        'q': sol.y[0:nlinks+1].T
+    }
+
+    anim.run(simdata, filepath='data/anim.mp4')
 
 
 if __name__ == '__main__':

@@ -80,12 +80,12 @@ def test2():
     theta = np.polyval(qpoly[:,1], s)
     u = np.polyval(upoly, s)
 
-    anim = CartPendAnim('fig/cartpend.svg', p.nlinks)
-    simdata = {
-        't': s * T,
-        'q': np.array([x, theta]).T
-    }
-    anim.run(simdata, animtime=2, filepath='data/anim.mp4')
+    # anim = CartPendAnim('fig/cartpend.svg', p.nlinks)
+    # simdata = {
+    #     't': s * T,
+    #     'q': np.array([x, theta]).T
+    # }
+    # anim.run(simdata, animtime=2, filepath='data/anim.mp4')
 
     _,axes = plt.subplots(3, 1, sharex=True)
     plt.sca(axes[0])

@@ -1,9 +1,11 @@
+from ast import Param
 import numpy as np
 from casadi import MX,SX,DM,polyval,vertcat,substitute,\
-    Function,reshape,nlpsol,sin
+    Function,reshape,nlpsol,sin,solve,pi
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from sym_poly import find_orthonormal_basis, find_orthogonal_basis
+from cartpend_dynamics import Dynamics, Parameters
 
 
 def evalf_coefs(poly):
@@ -227,12 +229,14 @@ def solve_mechanical_bvp(sys, qleft, qright, umin, umax, deg):
         'g': constraints
     }
 
+    # initial guess
+    dv0 = substitute(decision_variables, T, 1)
+    dv0 = substitute(dv0, cu, DM.zeros(cu.shape))
+    dv0 = substitute(dv0, cq, DM.zeros(cq.shape))
+
     # solve NLP
     BVP = nlpsol('BVP', 'ipopt', nlp)
-    dv0 = np.zeros(decision_variables.shape)
-    dv0[0] = 1
     sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
-
     B = basis_mat(basis_coefs)
 
     T_found = float(substitute(T, decision_variables, sol['x']))
@@ -324,7 +328,6 @@ def solve_mechanical_bvp_v2(sys, qleft, qright, umin, umax, deg):
     cost_function = dq
 
     D = DM(deriv_proj_mat(deg))
-    
 
     # control constraints
     for cp in collocation_points:
@@ -506,3 +509,4 @@ def test_solve_bvp():
 if __name__ == '__main__':
     np.set_printoptions(suppress=True, linewidth=200)
     test_solve_bvp()
+    # test_solve_bvp_2()

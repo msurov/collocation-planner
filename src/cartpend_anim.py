@@ -117,7 +117,7 @@ class CartPendAnim:
         x1 = np.min(x)
         x2 = np.max(x)
 
-        self.ax.set_ylim(-self.nlinks, self.nlinks)
+        # self.ax.set_ylim(-self.nlinks, self.nlinks)
         self.ax.set_xlim(x1 - self.nlinks, x2 + self.nlinks)
         self.ax.set_axisbelow(True)
 

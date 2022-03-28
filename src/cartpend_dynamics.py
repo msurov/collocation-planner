@@ -1,6 +1,6 @@
 from ast import Param
 from casadi import SX, DM, cos, sin, jacobian, vertcat, pinv, Function, \
-    cumsum, horzcat, jtimes, sumsqr, sum1, sum2, substitute
+    cumsum, horzcat, jtimes, sumsqr, sum1, sum2, substitute, DM_eye
 from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -83,10 +83,12 @@ class Dynamics:
         C = coriolis_mat(M, q, dq)
         G = jacobian(U, q).T
         B = vertcat(1, SX.zeros(self.nlinks,1))
+        Bperp = DM_eye(self.nlinks + 1)[1:,:]
         self.M = M
         self.C = C
         self.G = G
         self.B = B
+        self.Bperp = Bperp
 
         ddq = pinv(M) @ (-C @ dq - G + B @ u)
         self.rhs = vertcat(dq, ddq)

@@ -10,22 +10,26 @@ from matplotlib.colors import hsv_to_rgb
 
 
 def get_links_positions(q):
-    R'''
-        returns the array of coordinates
-        [
-            [x0, y0] \
-            [x1, y1] \
-               ⋮    \
-            [xn, yn] \
-        ]
-    '''
-    nlinks = len(q) - 1
-    positions = np.zeros((nlinks, 2))
-    positions[0,0] = q[0]
-    positions[1:,0] = np.sin(q[1:-1])
-    positions[1:,1] = np.cos(q[1:-1])
-    positions = np.cumsum(positions, axis=0)
-    return positions
+    q = np.array(q)
+    x = np.zeros(q.shape)
+    x[...,0] = q[...,0]
+    x[...,1:] = np.sin(q[...,1:])
+    x = np.cumsum(x, axis=-1)
+
+    y = np.zeros(q.shape)
+    y[...,1:] = np.cos(q[...,1:])
+    y = np.cumsum(y, axis=-1)
+
+    return x,y
+
+
+    # nlinks = len(q) - 1
+    # positions = np.zeros((nlinks, 2))
+    # positions[0,0] = q[0]
+    # positions[1:,0] = np.sin(q[1:-1])
+    # positions[1:,1] = np.cos(q[1:-1])
+    # positions = np.cumsum(positions, axis=0)
+    # return positions
 
 
 def gen_rgb(i):
@@ -90,35 +94,33 @@ class CartPendAnim:
             self.ax.add_patch(p)
 
     def move(self, q):
-        positions = get_links_positions(q)
+        x,y = get_links_positions(q)
         thetas = q[1:]
-        x0,y0 = positions[0,:]
         t = Affine2D()
-        t.translate(x0, y0)
+        t.translate(x[0], y[0])
 
         for p in self.body:
             p.set_transform(self.t0 + t + self.ax.transData)
 
         for i,link in enumerate(self.links):
-            x,y = positions[i]
-            theta = thetas[i]
             t = Affine2D()
-            t.rotate(-theta)
-            t.translate(x, y)
+            t.rotate(-thetas[i])
+            t.translate(x[i], y[i])
             link.set_transform(self.t0 + t + self.ax.transData)
-
 
     def run(self, simdata, filepath=None, fps=60, animtime=None, speedup=None):
         qsp = make_interp_spline(simdata['t'], simdata['q'], k=1)
         t1 = simdata['t'][0]
         t2 = simdata['t'][-1]
+        q = simdata['q']
 
-        x = simdata['q'][:,0]
+        x,y = get_links_positions(q)
         x1 = np.min(x)
         x2 = np.max(x)
-
-        # self.ax.set_ylim(-self.nlinks, self.nlinks)
-        self.ax.set_xlim(x1 - self.nlinks, x2 + self.nlinks)
+        y1 = np.min(y)
+        y2 = np.max(y)
+        plt.plot(x1, y1, 'o', alpha=0)
+        plt.plot(x2, y2, 'o', alpha=0)
         self.ax.set_axisbelow(True)
 
         plt.grid(True)
@@ -159,7 +161,7 @@ class CartPendAnim:
 
 
 def test():
-    anim = CartPendAnim('fig/cartpend-2.svg', nlinks=3, scale=0.01, flipy=True)
+    anim = CartPendAnim('fig/cartpend.svg', nlinks=3)
     t = np.linspace(0, 10, 1000)
     simdata = {
         't': t,

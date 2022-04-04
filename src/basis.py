@@ -49,15 +49,27 @@ def get_basis(deg, name='Legendre'):
         assert False
 
 
+def get_legendre_roots(deg):
+    r,_ = scipy.special.roots_legendre(deg)
+    return r
+
+def get_cheb1_roots(deg):
+    r,_ = scipy.special.roots_chebyt(deg)
+    return r
+
+def get_cheb2_roots(deg):
+    r,_ = scipy.special.roots_chebyu(deg)
+    return r
+
 def get_collocation_points(basis_fun):
     name = basis_fun.name()
     deg = basis_fun.numel_out() - 1
     if name == 'Legendre':
-        r,_ = scipy.special.roots_legendre(deg)
+        return get_legendre_roots(deg)
     elif name == 'Cheb1':
-        r,_ = scipy.special.roots_chebyt(deg)
+        return get_cheb1_roots(deg)
     elif name == 'Cheb2':
-        r,_ = scipy.special.roots_chebyu(deg)
+        return get_cheb2_roots(deg)
     else:
         assert False
     return r
@@ -105,5 +117,9 @@ def test_basis_roots():
     plt.show()
 
 
+def test_poly():
+    basis = get_basis(10, 'Legendre')
+
 if __name__ == '__main__':
     test_basis_roots()
+    test_poly()

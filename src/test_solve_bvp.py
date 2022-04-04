@@ -1,63 +1,73 @@
 from casadi import sin, cos, pi, SX, DM, \
     jtimes, jacobian, vertcat, horzcat, \
-    substitute, Function, reshape, nlpsol, power, solve, polyval, pinv, DM_inf
+    substitute, Function, reshape, nlpsol, power, solve, polyval, pinv, DM_inf, \
+    diagcat, repmat
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from cartpend_dynamics import Parameters, Dynamics
 from cartpend_anim import CartPendAnim
-from basis import get_basis, get_collocation_points, get_diap
+from basis import get_basis, get_collocation_points, \
+    get_diap, get_legendre_roots, get_cheb1_roots, get_cheb2_roots
 
 
-def solve_bvp(rhs_func, bc_func, deg):
+def get_lagrange_basis(points):
+    x = SX.sym('x')
+    n = len(points)
+    basis = []
+
+    for i in range(n):
+        b = 1
+        for j in range(n):
+            if i == j: continue
+            b *= (x - points[j]) / (points[i] - points[j])
+        basis += [b]
+    
+    basis = vertcat(*basis)
+    return Function('Lagrange', [x], [basis])
+
+
+def solve_bvp(rhs_func, bc_func, T, deg):
     nx,_ = rhs_func.size_in(0)
     s = SX.sym('s')
-    T = SX.sym('T')
 
-    basis_fun = get_basis(deg, 'Legendre')
+    s1,s2 = -1,1
+    n = deg
+    collocation_points = get_legendre_roots(deg)
+    # collocation_points = get_cheb1_roots(deg)
+    basis_fun = get_lagrange_basis(collocation_points)
     basis = basis_fun(s)
-    n,_ = basis.shape
     D_basis = jacobian(basis, s)
-    s1, s2 = get_diap(basis_fun)
-    collocation_points = get_collocation_points(basis_fun)
-
-    basis_left = substitute(basis, s, s1)
-    basis_right = substitute(basis, s, s2)
 
     cx = SX.sym('cx', nx, n)
     x = cx @ basis
     dx = cx @ D_basis
-    x_left = cx @ basis_left
-    x_right = cx @ basis_right
 
     constraints = []
     constraints_lb = []
     constraints_ub = []
 
     # differential equations
-    constraints += [T]
-    constraints_lb += [1e-2]
-    constraints_ub += [1e+2]
-
     for cp in collocation_points:
         xcp = substitute(x, s, cp)
         dxcp = substitute(dx, s, cp)
-        eq = rhs_func(xcp) * T - dxcp
+        eq = rhs_func(xcp) * T / (s2 - s1) - dxcp
 
         constraints += [eq]
         constraints_lb += [-1e-5 * DM.ones(eq.shape)]
         constraints_ub += [1e-5 * DM.ones(eq.shape)]
 
     # boundary conditions
-    eq = bc_func(x_left, x_right)
+    xleft = substitute(x, s, collocation_points[0])
+    xright = substitute(x, s, collocation_points[-1])
+    eq = bc_func(xleft, xright)
     constraints += [eq]
     constraints_lb += [-1e-5 * DM.ones(eq.shape)]
     constraints_ub += [1e-5 * DM.ones(eq.shape)]
 
     # compose NLP
     decision_variables = [reshape(cx, -1, 1)]
-    decision_variables += [T]
-    cost_function = T
+    cost_function = 1
 
     decision_variables = vertcat(*decision_variables)
     constraints = vertcat(*constraints)
@@ -71,37 +81,35 @@ def solve_bvp(rhs_func, bc_func, deg):
     }
 
     # initial guess
-    dv0 = substitute(decision_variables, T, 1)
-    dv0 = substitute(dv0, cx, DM.zeros(cx.shape))
+    dv0 = substitute(decision_variables, cx, DM.zeros(cx.shape))
     dv0 = DM(dv0)
 
     # solve NLP
     BVP = nlpsol('BVP', 'ipopt', nlp)
     sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
+
     F = Function('F', [s], [substitute(x, decision_variables, sol['x'])])
     ss = np.linspace(s1, s2, 100)
+    tt = (ss - s1) * T / (s2 - s1)
     yy = np.array([F(si) for si in ss])[:,:,0]
-    plt.plot(yy[:,0], yy[:,1])
+    plt.plot(tt, yy[:,0])
     plt.show()
 
 
 def test1():
-    x = SX.sym('x', 3)
-    beta = 8/3
-    rho = 28
-    sigma = 10
+    x = SX.sym('x', 2)
+    mu = 1.
     rhs = Function('RHS', [x], [
         vertcat(
-            sigma * (x[1] - x[0]),
-            x[0] * (rho - x[2]) - x[1],
-            x[0] * x[1] - beta * x[2]
+            x[1],
+            mu * (1 - x[0]**2) * x[1] - x[0]
         )
     ])
 
     xl = SX.sym('xl', x.shape)
     xr = SX.sym('xr', x.shape)
-    bc_func = Function('BC', [xl, xr], [vertcat(xl[0] - 0, xr[0] - 1, xl[1] - 3)])
-    solve_bvp(rhs, bc_func, 11)
+    bc_func = Function('BC', [xl, xr], [vertcat(xl[0] - 0, xr[0] - 1)])
+    solve_bvp(rhs, bc_func, 5, 15)
 
 
 if __name__ == '__main__':

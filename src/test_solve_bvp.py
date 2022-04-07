@@ -48,12 +48,19 @@ def get_lgl_collocation_points(N):
 def get_uniform_collocation_points(N):
     return np.linspace(-1, 1, N)
 
+def get_cgl_collocation_points(N):
+    i = np.arange(N)
+    cp = -np.cos(np.pi * i / (N - 1))
+    return cp
+
 def solve_bvp(rhs_func, bc_func, T, deg, eps=1e-7):
     nx,_ = rhs_func.size_in(0)
     s = SX.sym('s')
 
     s1,s2 = -1,1
-    collocation_points = get_lgl_collocation_points(deg + 1)
+    # collocation_points = get_lgl_collocation_points(deg + 1)
+    # collocation_points = get_uniform_collocation_points(deg + 1)
+    collocation_points = get_cgl_collocation_points(deg + 1)
     basis_fun = get_lagrange_basis(collocation_points)
     basis = basis_fun(s)
     D_basis = jacobian(basis, s)

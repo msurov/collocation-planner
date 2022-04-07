@@ -89,6 +89,7 @@ class Dynamics:
         self.G = G
         self.B = B
         self.Bperp = Bperp
+        self.U = U
 
         ddq = pinv(M) @ (-C @ dq - G + B @ u)
         self.rhs = vertcat(dq, ddq)

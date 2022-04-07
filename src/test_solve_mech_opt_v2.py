@@ -7,7 +7,47 @@ from scipy.integrate import solve_ivp
 from cartpend_dynamics import Parameters, Dynamics
 from cartpend_anim import CartPendAnim
 from basis import get_basis, get_collocation_points, get_diap
+import scipy.special
 
+
+def get_lagrange_basis(points):
+    x = SX.sym('x')
+    n = len(points)
+    basis = []
+
+    for i in range(n):
+        b = 1
+        for j in range(n):
+            if i == j: continue
+            b *= (x - points[j]) / (points[i] - points[j])
+        basis += [b]
+    
+    basis = vertcat(*basis)
+    return Function('Lagrange', [x], [basis])
+
+def get_lgl_collocation_points(N):
+    R'''
+        Legendre-Gauss-Lobatto collocation points
+        are the roots of the poly dL_[N-1] / dx
+        degree of the poly is (N - 2)
+        there are (N - 2) roots 
+        The collocation points also include {-1,1}
+
+        `N` is the number of collocation points to retrieve
+    '''
+    bk = scipy.special.legendre(N - 1)
+    coefs = np.polyder(bk.coefficients)
+    r = np.roots(coefs)
+    r = np.sort(r)
+    return np.concatenate(([-1], r, [1]))
+
+def get_uniform_collocation_points(N):
+    return np.linspace(-1, 1, N)
+
+def get_cgl_collocation_points(N):
+    i = np.arange(N)
+    cp = -np.cos(np.pi * i / (N - 1))
+    return cp
 
 def solve_mech_ivp(sys, q0, dq0, T, uoft):
     q = sys['q']
@@ -41,13 +81,13 @@ def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
     nq,_ = q.shape
 
     s = SX.sym('s')
-    basis_fun = get_basis(deg, 'Legendre')
+    collocation_points = get_cgl_collocation_points(deg + 1)
+    basis_fun = get_lagrange_basis(collocation_points)
     basis = basis_fun(s)
     n,_ = basis.shape
     D_basis = jacobian(basis, s)
     D2_basis = jacobian(D_basis, s)
-    s1, s2 = get_diap(basis_fun)
-    collocation_points = get_collocation_points(basis_fun)
+    s1, s2 = -1, 1
     basis_left = substitute(basis, s, s1)
     basis_right = substitute(basis, s, s2)
     D_basis_left = substitute(D_basis, s, s1)
@@ -69,8 +109,8 @@ def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
     # differential equations
     Tinv_sq = SX.sym('Tinv_sq')
     constraints += [Tinv_sq]
-    constraints_lb += [1e-4]
-    constraints_ub += [1e+4]
+    constraints_lb += [1e-2]
+    constraints_ub += [1e+2]
 
     k = Tinv_sq * (s2 - s1)**2
     sys = Bperp(q) @ (
@@ -125,7 +165,7 @@ def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
     # compose NLP
     decision_variables = [reshape(cq, -1, 1)]
     decision_variables += [Tinv_sq]
-    cost_function = 1
+    cost_function = -Tinv_sq
 
     decision_variables = vertcat(*decision_variables)
     constraints = vertcat(*constraints)
@@ -154,16 +194,22 @@ def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
     q_func = Function('q', [s], [q_found])
     Tinv_sq_found = float(substitute(Tinv_sq, decision_variables, sol['x']))
     T_found = 1 / np.sqrt(Tinv_sq_found)
+    u_found = substitute(u_expr, decision_variables, sol['x'])
+    u_func = Function('u', [s], [u_found])
+    dq_found = substitute(dq, decision_variables, sol['x'])
+    dq_func = Function('dq', [s], [dq_found * (s2 - s1) / T_found])
 
-    ss = np.linspace(s1, s2, 100)
+    ss = np.linspace(s1, s2, 1000)
     tt = (ss - s1) * T_found / (s2 - s1)
     qq = np.array([q_func(si) for si in ss], float)[:,:,0]
+    dqq = np.array([dq_func(si) for si in ss], float)[:,:,0]
+    uu = np.array([u_func(si) for si in ss], float)[:,:,0]
 
-    return tt, qq
+    return tt, qq, dqq, uu
 
 
 def test_solve_mech_opt():
-    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=3)
+    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=1)
     d = Dynamics(p)
     sys = {
         'M': d.M,
@@ -180,13 +226,35 @@ def test_solve_mech_opt():
 
     ans = None
     while ans is None:
-        ans = solve_mechanical_opt(sys, ql, qr, -10, 10, 15)
+        ans = solve_mechanical_opt(sys, ql, qr, -30, 30, 21)
 
-    t, q = ans
+    t, q, dq, u = ans
     simdata = {
         't': t,
-        'q': q
+        'q': q,
+        'u': u
     }
+
+    M_fun = Function('M', [d.q], [d.M])
+    U_fun = Function('U', [d.q], [d.U])
+    B = np.array(DM(d.B), float)
+    E = np.zeros(len(t))
+    W = np.zeros(len(t))
+
+    for i in range(len(t)):
+        qi = q[i]
+        dqi = dq[i]
+        ui = u[i]
+        M = np.array(M_fun(qi), float)
+        U = float(U_fun(qi))
+        W[i] = dqi.T @ B @ ui
+        E[i] = dqi.T @ M @ dqi / 2 + U
+    
+
+    plt.plot(t, W)
+    plt.plot(t[1:], np.diff(E) / np.diff(t))
+    plt.show()
+
     anim = CartPendAnim('fig/cartpend.svg', nlinks=p.nlinks)
     anim.run(simdata, filepath='data/anim.mp4')
 
@@ -194,3 +262,4 @@ def test_solve_mech_opt():
 if __name__ == '__main__':
     test_solve_mech_opt()
 
+# RODAU LOBATA

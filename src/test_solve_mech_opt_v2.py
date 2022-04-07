@@ -9,7 +9,6 @@ from cartpend_anim import CartPendAnim
 from basis import get_basis, get_collocation_points, get_diap
 import scipy.special
 
-
 def get_lagrange_basis(points):
     x = SX.sym('x')
     n = len(points)
@@ -208,8 +207,37 @@ def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
     return tt, qq, dqq, uu
 
 
+from multiprocessing import Process, Pool, Queue, Value, current_process
+from time import time
+
+def find_in_parallel(fun : callable, nproc, *args):
+
+    def f(q : Queue):
+        np.random.seed(int(time() * 1e+6) & 0xFFFFFFFF)
+        res = fun(*args)
+        q.put(res)
+
+    q = Queue()
+    tasks = [Process(target=f, args=(q,)) for i in range(nproc)]
+    for t in tasks: t.start()
+    value = None
+
+    while True:
+        value = q.get(True)
+        if value is not None:
+            break
+        t = Process(target=f, args=(q,))
+        t.start()
+        tasks.append(t)
+        tasks = filter(lambda t: t.is_alive(), tasks)
+        tasks = list(tasks)
+
+    for t in tasks: t.kill()
+    return value
+
+
 def test_solve_mech_opt():
-    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=1)
+    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=5)
     d = Dynamics(p)
     sys = {
         'M': d.M,
@@ -222,11 +250,14 @@ def test_solve_mech_opt():
         'u': d.u
     }
     ql = DM([0] + [pi] * p.nlinks)
-    qr = DM([-2] + [0] * p.nlinks)
+    qr = DM([2] + [0] * p.nlinks)
 
-    ans = None
-    while ans is None:
-        ans = solve_mechanical_opt(sys, ql, qr, -30, 30, 21)
+    args = (sys, ql, qr, -50, 50, 29)
+    ans = find_in_parallel(solve_mechanical_opt, 8, *args)
+
+    # ans = None
+    # while ans is None:
+    #     ans = solve_mechanical_opt(*args)
 
     t, q, dq, u = ans
     simdata = {
@@ -249,17 +280,21 @@ def test_solve_mech_opt():
         U = float(U_fun(qi))
         W[i] = dqi.T @ B @ ui
         E[i] = dqi.T @ M @ dqi / 2 + U
-    
 
+    plt.figure('power')
     plt.plot(t, W)
     plt.plot(t[1:], np.diff(E) / np.diff(t))
+
+    plt.figure('u(t)')
+    plt.plot(t, u)
+
+    plt.figure('q(t)')
+    plt.plot(t, q)
     plt.show()
 
     anim = CartPendAnim('fig/cartpend.svg', nlinks=p.nlinks)
-    anim.run(simdata, filepath='data/anim.mp4')
+    anim.run(simdata, filepath='data/anim.mp4', animtime=5)
 
 
 if __name__ == '__main__':
     test_solve_mech_opt()
-
-# RODAU LOBATA

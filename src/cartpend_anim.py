@@ -128,13 +128,13 @@ class CartPendAnim:
 
         if speedup is not None:
             assert speedup > 0
-            nframes = int((t2 - t1) * fps / speedup)
+            nframes = int((t2 - t1) * fps / speedup) + 1
         elif animtime is not None:
             assert animtime > 0
-            nframes = int(animtime * fps)
+            nframes = int(animtime * fps) + 1
             speedup = (t2 - t1) / animtime
         else:
-            nframes = int((t2 - t1) * fps)
+            nframes = int((t2 - t1) * fps) + 1
             speedup = 1
 
         def animinit():

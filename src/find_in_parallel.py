@@ -17,23 +17,16 @@ def find_in_parallel(fun : callable, nproc, *args):
     for t in tasks: t.start()
     value = None
 
-    while value is None:
+    while True:
         value = q.get(True)
+        if value is not None:
+            break
         t = Process(target=f, args=(q,))
         t.start()
         tasks.append(t)
         tasks = filter(lambda t: t.is_alive(), tasks)
         tasks = list(tasks)
-        print(len(tasks))
 
     for t in tasks: t.kill()
+    return value
 
-def f():
-    v = np.random.normal()
-    sleep(abs(1 + v))
-    if v > 5:
-        return v
-    return None
-
-
-find_in_parallel(f, 16)

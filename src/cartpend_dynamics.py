@@ -1,6 +1,6 @@
 from ast import Param
 from casadi import SX, DM, cos, sin, jacobian, vertcat, pinv, Function, \
-    cumsum, horzcat, jtimes, sumsqr, sum1, sum2, substitute, DM_eye
+    cumsum, horzcat, jtimes, sumsqr, sum1, sum2, substitute, DM_eye, hessian
 from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -46,11 +46,6 @@ class DynamicsOld:
         self.rhs = rhs
 
 
-def kinetic_energy_form(K, dq):
-    p = jacobian(K, dq)
-    M = jacobian(p, dq)
-    return M
-
 def coriolis_mat(M, q, dq):
     Z = jacobian(M @ dq, q)
     C = Z - 0.5 * Z.T
@@ -67,7 +62,6 @@ class Dynamics:
         q = SX.sym('q', self.nlinks + 1)
         dq = SX.sym('dq', self.nlinks + 1)
         u = SX.sym('u')
-        theta = q[1]
 
         self.q = q
         self.dq = dq
@@ -79,7 +73,7 @@ class Dynamics:
         K = (p.m_cart * velocities_sq[0] + p.m_pend * sum1(velocities_sq[1:])) / 2
         U = p.m_cart * p.g * positions[0,1] + \
             p.m_pend * p.g * sum1(positions[1:,1])
-        M = kinetic_energy_form(K, dq)
+        M,_ = hessian(K, dq)
         C = coriolis_mat(M, q, dq)
         G = jacobian(U, q).T
         B = vertcat(1, SX.zeros(self.nlinks,1))
@@ -90,10 +84,10 @@ class Dynamics:
         self.B = B
         self.Bperp = Bperp
         self.U = U
+        self.K = K
 
         ddq = pinv(M) @ (-C @ dq - G + B @ u)
         self.rhs = vertcat(dq, ddq)
-
 
     def get_positions(self, p : Parameters):
         x = self.q[0]

@@ -7,88 +7,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sympy import frac, hessian, jacobi
 from cartpend_dynamics import Parameters, Dynamics
-from basis import get_basis
 from numpy.polynomial import Polynomial
 from scipy.optimize import root_scalar, brentq
 from numpy.polynomial.legendre import legder, legroots, Legendre, legval
+from collocation import get_lgl_collocation_points, \
+    get_lgl_weights, get_lagrange_basis
 
 
-def get_lagrange_basis(points):
-    x = SX.sym('x')
-    n = len(points)
-    basis = []
-
-    for i in range(n):
-        b = 1
-        for j in range(n):
-            if i == j: continue
-            b *= (x - points[j]) / (points[i] - points[j])
-        basis += [b]
-    
-    basis = vertcat(*basis)
-    return Function('Lagrange', [x], [basis])
-
-def get_lgl_collocation_points(N):
-    R'''
-        Legendre-Gauss-Lobatto collocation points
-        are the roots of the poly dL_[N-1] / dx
-        degree of the poly is (N - 2)
-        there are (N - 2) roots 
-        The collocation points also include {-1,1}
-
-        `N` is the number of collocation points to retrieve
-    '''
-    L = np.zeros(N)
-    L[-1] = 1
-    DL = legder(L)
-    roots = legroots(DL)
-    assert len(roots) == N-2
-    assert np.allclose(legval(roots, DL), 0)
-    roots = np.sort(roots)
-    collocation_points = np.concatenate(([-1], roots, [1]))
-    return collocation_points
-
-def get_lgl_weights(collocation_points):
-    N = len(collocation_points)
-    bk = scipy.special.legendre(N - 1)
-    weights = np.zeros(N)
-    for j in range(N):
-        tmp = N * (N-1) * np.polyval(bk, collocation_points[j])**2
-        weights[j] = 2 / tmp
-    return weights
-
-def get_cgl_collocation_points(N):
-    i = np.arange(N)
-    cp = -np.cos(np.pi * i / (N - 1))
-    return cp
-
-def get_cgl_weights(collocation_points):
-    N = len(collocation_points)
-    weights = pi/(N - 1) * np.ones(N)
-    weights[0] = pi/(2*N - 2)
-    weights[-1] = pi/(2*N - 2)
-    return weights
-
-def test_lgl():
-    N = 15
-    collocation_points = get_lgl_collocation_points(N)
-    weights = get_lgl_weights(collocation_points)
-    I1 = np.exp(2 * collocation_points) @ weights
-    I2 = 0.5 * np.exp(2 * 1) - 0.5 * np.exp(2 * -1)
-    assert np.allclose(I1, I2)
-
-def test_cgl():
-    N = 25
-    collocation_points = get_cgl_collocation_points(N)
-    weights = get_cgl_weights(collocation_points)
-    I1 = 0
-    for cp,w in zip(collocation_points, weights):
-        I1 += np.sqrt(1 - cp**2) * np.exp(2 * cp) * w
-    I2 = 0.5 * np.exp(2 * 1) - 0.5 * np.exp(2 * -1)
-    print(I1)
-    print(I2)
-
-def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
+def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
     collocation_points = get_lgl_collocation_points(deg + 1)
     weights = get_lgl_weights(collocation_points)
 
@@ -138,6 +64,10 @@ def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
 
     # energy must be constant
     E_fun = Function('E', [d.q, d.dq], [d.K + d.U])
+    qi = substitute(q, s, s1)
+    dqi = substitute(dq, s, s1)
+    E0 = E_fun(qi, dqi)
+
     for cp in collocation_points:
         qi = substitute(q, s, cp)
         dqi = substitute(dq, s, cp)
@@ -160,11 +90,14 @@ def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
     }
 
     # initial guess
-    dv0 = substitute(decision_variables, cq, 1e-2*np.random.normal(size=cq.shape))
+    dv0 = substitute(decision_variables, cq, 1e-5*np.random.normal(size=cq.shape))
     dv0 = DM(dv0)
 
     BVP = nlpsol('BVP', 'ipopt', nlp)
     sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
+    stat = BVP.stats()
+    if not stat['success']:
+        return None
 
     q_found = substitute(q, decision_variables, sol['x'])
     q_func = Function('q', [s], [q_found])
@@ -177,17 +110,29 @@ def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
 
     return ss - s1, qq, dqq
 
+class Dynamics:
+    def __init__(self) -> None:
+        self.q = SX.sym('theta')
+        self.dq = SX.sym('dtheta')
+        self.K = self.dq**2/2
+        self.U = cos(self.q)
+        self.M = 1
+
 
 def test():
-    from cartpend_anim import CartPendAnim
+    # from cartpend_anim import CartPendAnim
 
-    nlinks = 2
-    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=nlinks)
-    d = Dynamics(p)
+    # nlinks = 2
+    # p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=nlinks)
+    # d = Dynamics(p)
+    d = Dynamics()
 
     ql = DM([0, pi-0.5, pi-0.1])
     qr = DM([0, pi+0.5, pi+0.5])
-    t,q,dq = solve_mech(d, 20., ql, qr, 31)
+    ans = None
+    while ans is None:
+        ans = solve_mech(d, ql, qr, 25)
+    t,q,dq = ans
 
     if True:
         E = np.zeros(len(t))

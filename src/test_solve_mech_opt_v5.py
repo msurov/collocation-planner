@@ -1,47 +1,31 @@
+from tkinter.tix import Tree
 from casadi import sin, cos, pi, SX, DM, \
     jtimes, jacobian, vertcat, horzcat, \
-    substitute, Function, reshape, nlpsol, power, solve, polyval, pinv, DM_inf, sum1
-import scipy.special
+    substitute, Function, reshape, nlpsol, fabs, ramp, sqrt
 from scipy.integrate import solve_ivp
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import frac, hessian, jacobi
-from cartpend_dynamics import Parameters, Dynamics
-from basis import get_basis
-from numpy.polynomial import Polynomial
-from scipy.optimize import root_scalar, brentq
-from numpy.polynomial.legendre import legder, legroots, Legendre, legval
+# from cartpend_dynamics import Parameters, Dynamics
+from collocation import get_lgl_collocation_points, \
+    get_lgl_weights, get_lagrange_basis
 
 
 def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
-    collocation_points = get_lgl_collocation_points(deg + 1)
-    weights = get_lgl_weights(collocation_points)
+    nq = deg + 1
+    q = SX.sym('q', nq - 2)
+    q = vertcat(ql, q, qr)
 
-    s = SX.sym('s')
-    basis_fun = get_lagrange_basis(collocation_points)
-    # basis_fun = get_basis(deg, 'Legendre')
-    basis = basis_fun(s)
-    D_basis = jacobian(basis, s)
-
-    nq,_ = d.q.shape
-    n,_ = basis.shape
-    cq = SX.sym('cq', nq, n)
-    q = cq @ basis
-    dq = cq @ D_basis
-    s1 = -1
-    s2 = 1
-    basis_left = substitute(basis, s, s1)
-    basis_right = substitute(basis, s, s2)
-    q_left = cq @ basis_left
-    q_right = cq @ basis_right
-
-    U_fun = Function('U', [d.q], [d.U])
     F = 0
 
-    for wi,cp in zip(weights, collocation_points):
-        qi = substitute(q, s, cp)
-        Ui = U_fun(qi)
-        F += wi * np.sqrt(E0 - Ui)
+    for i in range(1, nq):
+        qi = (q[i-1] + q[i]) / 2
+        dqi = q[i] - q[i-1]
+
+        Mi = substitute(d.M, d.q, qi)
+        Ui = substitute(d.U, d.q, qi)
+        tmp = fabs(dqi) * sqrt(Mi * ramp(E0 - Ui))
+        F += tmp
 
     cost_function = F
 
@@ -49,29 +33,22 @@ def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
     constraints_lb = []
     constraints_ub = []
 
-    # boundary conditions
-    eq = q_left - ql
-    constraints += [eq]
-    constraints_lb += [-eps * DM.ones(eq.shape)]
-    constraints_ub += [eps * DM.ones(eq.shape)]
-
-    eq = q_right - qr
-    constraints += [eq]
-    constraints_lb += [-eps * DM.ones(eq.shape)]
-    constraints_ub += [eps * DM.ones(eq.shape)]
-
-    # energy must be constant
-    E_fun = Function('E', [d.q, d.dq], [d.K + d.U])
-    for cp in collocation_points:
-        qi = substitute(q, s, cp)
-        dqi = substitute(dq, s, cp)
-        eq = E_fun(qi, dqi) - E0
-        constraints += [eq]
-        constraints_lb += [-eps * DM.ones(eq.shape)]
-        constraints_ub += [eps * DM.ones(eq.shape)]
+    # for i in range(1, nq):
+    #     qi = (q[i-1] + q[i]) / 2
+    #     Ui = substitute(d.U, d.q, qi)
+    #     eq = E0 - Ui
+    #     constraints += [eq]
+    #     constraints_lb += [1e-5 * np.ones(eq.shape)]
+    #     constraints_ub += [1e+5 * np.ones(eq.shape)]
+    
+    # for i in range(1, nq):
+    #     eq = q[i]
+    #     constraints += [eq]
+    #     constraints_lb += [-pi * np.ones(eq.shape)]
+    #     constraints_ub += [pi * np.ones(eq.shape)]
 
     # nlp
-    decision_variables = [reshape(cq, -1, 1)]
+    decision_variables = [reshape(q[1:-1], -1, 1)]
     decision_variables = vertcat(*decision_variables)
     constraints = vertcat(*constraints)
     constraints_lb = vertcat(*constraints_lb)
@@ -84,36 +61,66 @@ def solve_mech(d, E0 : float, ql : DM, qr : DM, deg : int, eps=1e-7):
     }
 
     # initial guess
-    dv0 = substitute(decision_variables, cq, 1e-2*np.random.normal(size=cq.shape))
+    dv0 = 1e-5*np.random.normal(size=decision_variables.shape)
     dv0 = DM(dv0)
 
     BVP = nlpsol('BVP', 'ipopt', nlp)
     sol = BVP(x0=dv0, lbg=constraints_lb, ubg=constraints_ub)
 
+    # tmp = substitute(constraints, decision_variables, sol['x'])
+    # print(tmp)
+    # exit()
+
+    stat = BVP.stats()
+    if not stat['success']:
+        return None
+
     q_found = substitute(q, decision_variables, sol['x'])
-    q_func = Function('q', [s], [q_found])
-    dq_found = substitute(dq, decision_variables, sol['x'])
-    dq_func = Function('dq', [s], [dq_found])
+    q_found = DM(q_found)
+    q_found = np.array(q_found, float)
+    t = np.linspace(0, 1, nq)
 
-    ss = np.linspace(s1, s2, 1000)
-    qq = np.array([q_func(si) for si in ss], float)[:,:,0]
-    dqq = np.array([dq_func(si) for si in ss], float)[:,:,0]
+    return t, q_found
 
-    return ss - s1, qq, dqq
 
+class Dynamics:
+    def __init__(self) -> None:
+        self.q = SX.sym('theta')
+        self.dq = SX.sym('dtheta')
+        self.K = self.dq**2/2
+        self.U = cos(self.q)
+        self.M = 1
 
 def test():
     from cartpend_anim import CartPendAnim
 
-    nlinks = 2
-    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=nlinks)
-    d = Dynamics(p)
+    # nlinks = 2
+    # p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=nlinks)
+    # d = Dynamics(p)
 
-    ql = DM([0, pi-0.5, pi-0.1])
-    qr = DM([0, pi+0.5, pi+0.5])
-    t,q,dq = solve_mech(d, 20., ql, qr, 15)
+    d = Dynamics()
+    ql = DM([-pi/2])
+    qr = DM([pi/2])
+
+    E0 = 1.
+    ans = None
+    while ans is None:
+        ans = solve_mech(d, E0, ql, qr, 25)
+    
+    t,q = ans
+    print(t)
+    print(q)
 
     if True:
+        plt.plot(t, q)
+        plt.show()
+
+    if False:
+        U = np.array([float(substitute(d.U, d.q, q[i])) for i in range(len(q))])
+        plt.plot(t, E0 - U)
+        plt.show()
+
+    if False:
         E = np.zeros(len(t))
         E_fun = Function('E', [d.q, d.dq], [d.K + d.U])
         for i in range(len(t)): E[i] = E_fun(q[i], dq[i])

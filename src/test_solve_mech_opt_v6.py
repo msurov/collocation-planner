@@ -8,7 +8,7 @@ from cartpend_dynamics import Parameters, Dynamics
 from collocation import get_lgl_collocation_points, get_lgl_weights, get_lagrange_basis
 
 
-def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
+def solve_mech(dyn, ql : DM, qr : DM, deg : int, eps=1e-7):
     collocation_points = get_lgl_collocation_points(deg + 1)
     weights = get_lgl_weights(collocation_points)
 
@@ -17,7 +17,7 @@ def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
     basis = basis_fun(s)
     D_basis = jacobian(basis, s)
 
-    nq,_ = d.q.shape
+    nq,_ = dyn.q.shape
     n,_ = basis.shape
     cq = SX.sym('cq', nq, n)
     q = cq @ basis
@@ -28,15 +28,19 @@ def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
     basis_right = substitute(basis, s, s2)
     q_left = cq @ basis_left
     q_right = cq @ basis_right
+    nu,_ = dyn.u.shape
+    cu = SX.sym('cu', nu, n)
+    u = cu @ basis
 
-    L = Function('L', [d.q, d.dq], [d.K - d.U])
+    L = Function('L', [dyn.q, dyn.dq], [dyn.K - dyn.U])
     F = 0
 
     for wi,cp in zip(weights, collocation_points):
         qi = substitute(q, s, cp)
         dqi = substitute(dq, s, cp)
+        ui = substitute(u, s, cp)
         Li = L(qi, dqi)
-        F += wi * Li
+        F += wi * (Li + qi.T @ dyn.B @ ui)
 
     cost_function = F
 
@@ -53,8 +57,15 @@ def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
     constraints += [eq]
     constraints_lb += [-eps * DM.ones(eq.shape)]
     constraints_ub += [eps * DM.ones(eq.shape)]
+
+    for cp in collocation_points:
+        ui = substitute(u, s, cp)
+        constraints += [ui]
+        constraints_lb += [-1 * DM.ones(ui.shape)]
+        constraints_ub += [1 * DM.ones(ui.shape)]
     
     decision_variables = [reshape(cq, -1, 1)]
+    decision_variables += [reshape(cu, -1, 1)]
     decision_variables = vertcat(*decision_variables)
     constraints = vertcat(*constraints)
     constraints_lb = vertcat(*constraints_lb)
@@ -68,6 +79,7 @@ def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
 
     # initial guess
     dv0 = substitute(decision_variables, cq, 1e-2*np.random.normal(size=cq.shape))
+    dv0 = substitute(dv0, cu, 1e-2*np.random.normal(size=cu.shape))
     dv0 = DM(dv0)
 
     BVP = nlpsol('BVP', 'ipopt', nlp)
@@ -80,15 +92,15 @@ def solve_mech(d, ql : DM, qr : DM, deg : int, eps=1e-7):
     q_func = Function('q', [s], [q_found])
     dq_found = substitute(dq, decision_variables, sol['x'])
     dq_func = Function('dq', [s], [dq_found])
-
-    print('cq')
-    print(substitute(cq, decision_variables, sol['x']))
+    u_found = substitute(u, decision_variables, sol['x'])
+    u_func = Function('u', [s], [u_found])
 
     ss = np.linspace(s1, s2, 1000)
     qq = np.array([q_func(si) for si in ss], float)[:,:,0]
     dqq = np.array([dq_func(si) for si in ss], float)[:,:,0]
+    uu = np.array([u_func(si) for si in ss], float)[:,:,0]
 
-    return ss - s1, qq, dqq
+    return ss - s1, qq, dqq, uu
 
 def test():
     from cartpend_anim import CartPendAnim
@@ -99,9 +111,9 @@ def test():
 
     ql = DM([0, pi-0.5, pi-0.1])
     qr = DM([0, pi+0.5, pi+0.5])
-    t,q,dq = solve_mech(d, ql, qr, 25)
+    t,q,dq,u = solve_mech(d, ql, qr, 21)
 
-    if True:
+    if False:
         E = np.zeros(len(t))
         E_fun = Function('E', [d.q, d.dq], [d.K + d.U])
         for i in range(len(t)): E[i] = E_fun(q[i], dq[i])
@@ -116,7 +128,7 @@ def test():
         }
         anim.run(simdata, filepath='data/anim.mp4')
 
-    if False:
+    if True:
         rhs = Function('rhs', [d.q, d.dq], [substitute(d.rhs, d.u, 0)])
         n,_ = d.q.shape
 

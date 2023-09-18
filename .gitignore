@@ -2,3 +2,6 @@
 *.lyx~
 __pycache__
 *.mp4
+*.egg-info/
+build/
+.venv/

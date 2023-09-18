@@ -122,10 +122,10 @@ class Dynamics:
 def test():
     # from cartpend_anim import CartPendAnim
 
-    # nlinks = 2
-    # p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=nlinks)
-    # d = Dynamics(p)
-    d = Dynamics()
+    nlinks = 2
+    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=nlinks)
+    d = Dynamics(p)
+    # d = Dynamics()
 
     ql = DM([0, pi-0.5, pi-0.1])
     qr = DM([0, pi+0.5, pi+0.5])
@@ -141,7 +141,7 @@ def test():
         plt.plot(t, E)
         plt.show()
 
-    if False:
+    if True:
         anim = CartPendAnim('fig/cartpend.svg', nlinks)
         simdata = {
             't': t,

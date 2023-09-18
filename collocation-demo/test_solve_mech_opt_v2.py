@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from cartpend_dynamics import Parameters, Dynamics
 from cartpend_anim import CartPendAnim
-from basis import get_basis, get_collocation_points, get_diap
 import scipy.special
 
 
@@ -71,7 +70,6 @@ def solve_mech_ivp(sys, q0, dq0, T, uoft):
 
 def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
     q = sys['q']
-    u = sys['u']
     dq = sys['dq']
     M = Function('M', [q], [sys['M']])
     C = Function('C', [q,dq], [sys['C']])
@@ -223,10 +221,9 @@ def test_solve_mech_opt():
         'u': d.u
     }
     ql = DM([0] + [pi] * p.nlinks)
-    qr = DM([-2] + [0] * p.nlinks)
+    qr = DM([-1] + [0] * p.nlinks)
 
-    args = (sys, ql, qr, -10, 10, 25)
-    # ans = find_in_parallel(solve_mechanical_opt, 8, *args)
+    args = (sys, ql, qr, -50, 50, 17)
     ans = None
     while ans is None:
         ans = solve_mechanical_opt(*args)
@@ -265,7 +262,7 @@ def test_solve_mech_opt():
     plt.show()
 
     anim = CartPendAnim('fig/cartpend.svg', nlinks=p.nlinks)
-    anim.run(simdata, filepath='data/anim.mp4', animtime=5)
+    anim.run(simdata, filepath='data/anim.gif', animtime=5)
 
 
 if __name__ == '__main__':

@@ -108,7 +108,7 @@ def test():
         plt.plot(t, E)
         plt.show()
 
-    if False:
+    if True:
         anim = CartPendAnim('fig/cartpend.svg', nlinks)
         simdata = {
             't': t,

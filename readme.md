@@ -31,3 +31,5 @@ $$
     \dot{q}\left(0\right) = 0, \\
     \dot{q}\left(T\right) = 0
 $$
+
+![alt text](img/anim.gif)

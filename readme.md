@@ -32,4 +32,4 @@ $$
     \dot{q}\left(T\right) = 0
 $$
 
-![alt text](img/anim.gif)
+![alt text](data/anim.gif)

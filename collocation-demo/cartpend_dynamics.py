@@ -31,7 +31,7 @@ class DynamicsOld:
         C = Z - 0.5 * Z.T
         U = p.m_pend * p.g * p.l * cos(theta)
         G = jacobian(U, q).T
-        B = DM([[1], 0])
+        B = DM([[1], [0]])
         ddq = pinv(M) @ (-C @ dq - G + B @ u)
         rhs = vertcat(dq, ddq)
 
@@ -103,7 +103,7 @@ class Dynamics:
 def test():
     from cartpend_anim import CartPendAnim
 
-    nlinks = 5
+    nlinks = 3
     p = Parameters(m_pend = 0.1, m_cart=0.5, l = 0.5, g = 9.8, nlinks=nlinks)
     d = Dynamics(p)
 
@@ -123,7 +123,7 @@ def test():
         'q': sol.y[0:nlinks+1].T
     }
 
-    anim.run(simdata, filepath='data/anim.mp4')
+    anim.run(simdata, fps=30, filepath='data/cart-pend-free-motion.gif')
 
 
 if __name__ == '__main__':

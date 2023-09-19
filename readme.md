@@ -1,3 +1,6 @@
+# Dynamics of the Cart-N-Links-Pendulum System
+![alt text](data/cart-pend-free-motion.gif)
+
 # Draft implementation of the collocation algorithm
 
 There are three algorithms implemented:
@@ -32,4 +35,4 @@ $$
     \dot{q}\left(T\right) = 0
 $$
 
-![alt text](data/anim.gif)
+![alt text](data/swing-up.gif)

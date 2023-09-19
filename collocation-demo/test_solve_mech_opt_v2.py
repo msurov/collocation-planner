@@ -208,7 +208,7 @@ def solve_mechanical_opt(sys, ql, qr, umin, umax, deg, eps=1e-7):
 
 
 def test_solve_mech_opt():
-    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=2)
+    p = Parameters(m_pend=0.15, l = 0.5, m_cart=0.1, g=9.8, nlinks=3)
     d = Dynamics(p)
     sys = {
         'M': d.M,
@@ -221,7 +221,7 @@ def test_solve_mech_opt():
         'u': d.u
     }
     ql = DM([0] + [pi] * p.nlinks)
-    qr = DM([-1] + [0] * p.nlinks)
+    qr = DM([0] + [0] * p.nlinks)
 
     args = (sys, ql, qr, -50, 50, 17)
     ans = None
@@ -262,7 +262,7 @@ def test_solve_mech_opt():
     plt.show()
 
     anim = CartPendAnim('fig/cartpend.svg', nlinks=p.nlinks)
-    anim.run(simdata, filepath='data/anim.gif', animtime=5)
+    anim.run(simdata, filepath='data/swing-up.gif', fps=30, animtime=5)
 
 
 if __name__ == '__main__':
